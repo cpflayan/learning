@@ -143,90 +143,18 @@ class SimpleTradingEnv(gym.Env):
 
         self.current_step += 1
         if self.current_step >= self.max_step:
-        truncated = True
-def step(self, action):
-    terminated = False
-    truncated = False
-    info = {}
-
-    price = self.data[self.current_step][0]  # close 價格（標準化後）
-    slippage_pct = np.random.uniform(-0.0003, 0.0003)
-    executed_price = price * (1 + slippage_pct)
-    fee_rate = 0.0004
-    fee = executed_price * fee_rate
-    reward = 0.0
-
-    # === 開倉邏輯 ===
-    if self.position == 0:
-        if action in [1, 2]:
-            self.position = 1 if action == 1 else -1
-            self.entry_price = executed_price
-            self.entry_step = self.current_step
-            self.cash -= fee
-            reward = -fee  # 開倉付出手續費
-        else:
-            reward = 0.0  # 持有不動作
-    else:
-        # === 有倉位 ===
-        holding_time = self.current_step - self.entry_step
-        price_diff = executed_price - self.entry_price
-        unrealized_pnl = price_diff * self.position
-
-        # === 強制平倉（超時） ===
-        if holding_time >= 200:
-            pnl = unrealized_pnl
-            total_fee = (executed_price + self.entry_price) * fee_rate
-            net_pnl = pnl - total_fee
-            self.cash += net_pnl
-            reward = np.clip(net_pnl * 5, -10, 10)  # 平倉獎勵限制在 [-10, 10]
-            self.position = 0
-            self.entry_price = 0
             truncated = True
-        else:
-            # === 中間狀態：決定是否平倉或持有 ===
-            if action == 0:
-                # 持有：給少量浮動獎勵 + 懲罰長時間持倉
-                reward = np.clip(unrealized_pnl * 0.5, -1, 1) - 0.001 * (holding_time / 200)
-            else:
-                # 平倉再開倉
-                pnl = unrealized_pnl
-                total_fee = (executed_price + self.entry_price) * fee_rate
-                net_pnl = pnl - total_fee
-                self.cash += net_pnl
-                reward = np.clip(net_pnl * 5, -10, 10)
 
-                # 重設倉位
-                self.position = 0
-                self.entry_price = 0
 
-                # 再開新倉
-                if action in [1, 2]:
-                    self.position = 1 if action == 1 else -1
-                    self.entry_price = executed_price
-                    self.entry_step = self.current_step
-                    self.cash -= fee
-                    reward -= fee
+        
+            obs = self._get_obs()
+            reward = float(np.clip(reward, -20, 20))  # 避免極端獎勵值
 
-    # === 評估淨值 ===
-    net_worth = self.cash + (self.position * (price - self.entry_price) if self.position != 0 else 0)
+            info['net_worth'] = net_worth
+            info['position'] = self.position
+            info['step'] = self.current_step
 
-    # === 爆倉懲罰 ===
-    if net_worth < 8000:
-        reward -= 10  # 溫和但有力的懲罰
-        terminated = True
-
-    self.current_step += 1
-    if self.current_step >= self.max_step:
-        truncated = True
-
-        obs = self._get_obs()
-        reward = float(np.clip(reward, -20, 20))  # 避免極端獎勵值
-
-        info['net_worth'] = net_worth
-        info['position'] = self.position
-        info['step'] = self.current_step
-
-        return obs, reward, terminated, truncated, info
+            return obs, reward, terminated, truncated, info
 
 # --- 4. 訓練用 Callback 打印與儲存紀錄 ---
 import pandas as pd
