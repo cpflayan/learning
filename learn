@@ -103,7 +103,7 @@ class SimpleTradingEnv(gym.Env):
                 pnl = unrealized_pnl
                 total_fee = (executed_price + self.entry_price) * fee_rate
                 net_pnl = pnl - total_fee
-                self.cash += net_pnl.
+                self.cash += net_pnl
                 reward = np.clip(net_pnl * 5, -10, 10)  # 平倉獎勵限制在 [-10, 10]
                 self.position = 0
                 self.entry_price = 0
@@ -147,14 +147,14 @@ class SimpleTradingEnv(gym.Env):
 
 
         
-            obs = self._get_obs()
-            reward = float(np.clip(reward, -20, 20))  # 避免極端獎勵值
+        obs = self._get_obs()
+        reward = float(np.clip(reward, -20, 20))  # 避免極端獎勵值
 
-            info['net_worth'] = net_worth
-            info['position'] = self.position
-            info['step'] = self.current_step
+        info['net_worth'] = net_worth
+        info['position'] = self.position
+        info['step'] = self.current_step
 
-            return obs, reward, terminated, truncated, info
+        return obs, reward, terminated, truncated, info
 
 # --- 4. 訓練用 Callback 打印與儲存紀錄 ---
 import pandas as pd
@@ -209,4 +209,3 @@ model = PPO("MlpPolicy",
 model.learn(total_timesteps=100_000, callback=TrainingLogger(log_path='log.csv'))
 
 model.save("ppo_trading_model")
-
