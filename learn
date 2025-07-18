@@ -71,16 +71,16 @@ class SimpleTradingEnv(gym.Env):
         return np.append(obs, self.position).astype(np.float32)
 
     def step(self, action):
-    terminated = False
-    truncated = False
-    info = {}
+        terminated = False
+        truncated = False
+        info = {}
 
-    price = self.data[self.current_step][0]  # close 價格（標準化後）
-    slippage_pct = np.random.uniform(-0.0003, 0.0003)
-    executed_price = price * (1 + slippage_pct)
-    fee_rate = 0.0004
-    fee = executed_price * fee_rate
-    reward = 0.0
+        price = self.data[self.current_step][0]  # close 價格（標準化後）
+        slippage_pct = np.random.uniform(-0.0003, 0.0003)
+        executed_price = price * (1 + slippage_pct)
+        fee_rate = 0.0004
+        fee = executed_price * fee_rate
+        reward = 0.0
 
     # === 開倉邏輯 ===
     if self.position == 0:
