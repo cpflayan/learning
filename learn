@@ -9,9 +9,34 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_checker import check_env
 
-# --- Fibonacci 水平線函數略（同你原本）---
 
-# --- 資料前處理（略），假設 scaled_data 已經準備好 ---
+# --- 1. 資料前處理: 加入 Fibonacci 水平線特徵 ---
+def add_fibonacci_levels(df, window=50):
+    high = df['high'].rolling(window).max()
+    low = df['low'].rolling(window).min()
+    diff = high - low
+    df['fib_236'] = high - diff * 0.236
+    df['fib_382'] = high - diff * 0.382
+    df['fib_618'] = high - diff * 0.618
+    return df
+
+# 這邊你自己替換成實際讀檔程式
+df = pd.read_csv('ETHUSDT_1m_klines_merged.csv')  # 請改成你的檔案路徑
+df.columns = df.columns.str.lower().str.strip()
+df = add_fibonacci_levels(df)
+df = df.dropna().reset_index(drop=True)
+
+# 選擇要使用的特徵欄位
+features = df[['close', 'volume', 'high', 'low', 'fib_236', 'fib_382', 'fib_618']].copy()
+data_array = features.values.astype(np.float32)
+print("資料形狀:", data_array.shape)
+
+# --- 2. 標準化 ---
+scaler = StandardScaler()
+scaled_data = scaler.fit_transform(data_array)
+joblib.dump(scaler, 'scaler_rl.pkl')
+print("已完成正規化:", scaled_data.shape)
+
 
 class SimpleTradingEnv(gym.Env):
     def __init__(self, data):
@@ -142,8 +167,36 @@ class SimpleTradingEnv(gym.Env):
 
         return obs, reward, terminated, truncated, info
 
-# --- Callback 同前不變 ---
+# --- 4. 訓練用 Callback 打印與儲存紀錄 ---
+import pandas as pd
+class TrainingLogger(BaseCallback):
+    def __init__(self, log_path='log.csv', verbose=1):
+        super().__init__(verbose)
+        self.log_path = log_path
+        self.logs = []
 
+    def _on_step(self) -> bool:
+        metrics = self.model.logger.name_to_value
+        if 'rollout/ep_rew_mean' in metrics:
+            entry = {
+                'iteration': len(self.logs),
+                'ep_rew_mean': metrics.get('rollout/ep_rew_mean', 0),
+                'ep_len_mean': metrics.get('rollout/ep_len_mean', 0),
+                'explained_variance': metrics.get('train/explained_variance', 0),
+                'entropy_loss': metrics.get('train/entropy_loss', 0),
+                'value_loss': metrics.get('train/value_loss', 0),
+                'policy_gradient_loss': metrics.get('train/policy_gradient_loss', 0)
+            }
+            self.logs.append(entry)
+            if len(self.logs) % 5 == 0 and self.verbose > 0:
+                print(f"[Iter {entry['iteration']:>3}] Reward: {entry['ep_rew_mean']:.2f} | "
+                      f"Len: {entry['ep_len_mean']:.0f} | ExplVar: {entry['explained_variance']:.2f} | "
+                      f"Entropy: {entry['entropy_loss']:.2f}")
+        return True
+
+    def _on_training_end(self) -> None:
+        pd.DataFrame(self.logs).to_csv(self.log_path, index=False)
+        print(f"\n✅ 訓練完成，log 存於：{self.log_path}")
 # 建立環境與模型部分同你原本：
 
 env = SimpleTradingEnv(data=scaled_data)
@@ -167,3 +220,4 @@ model = PPO("MlpPolicy",
 model.learn(total_timesteps=100_000, callback=TrainingLogger(log_path='log.csv'))
 
 model.save("ppo_trading_model")
+
